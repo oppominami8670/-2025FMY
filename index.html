@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>マルチキャリア料金シミュレーター【家族・比較機能統合版】</title>
+    <title>マルチキャリア料金シミュレーター【家族・3社比較機能統合版】</title>
     <style>
         :root { --primary: #6c5ce7; --bg: #f0f2f5; --accent: #333; --loader: #6c5ce7; --success: #28a745; --info: #17a2b8; --warning: #ff9f43; }
         body { font-family: sans-serif; background: var(--bg); padding: 0; color: var(--accent); line-height: 1.4; margin: 0; }
@@ -63,8 +63,25 @@
         /* 家族合計・比較表示用 */
         .summary-card { background: white; padding: 30px; border-radius: 15px; max-width: 600px; margin: auto; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
         .summary-val { font-size: 2.5rem; color: var(--primary); font-weight: bold; margin: 10px 0; }
-        .compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px; }
-        .diff-box { grid-column: 1 / span 2; background: var(--info); color: white; padding: 20px; border-radius: 10px; font-size: 1.2rem; font-weight: bold; margin-top: 20px; }
+        
+        /* 3列比較に変更 */
+        .compare-grid { 
+            display: grid; 
+            grid-template-columns: repeat(3, 1fr); /* 3列 */
+            gap: 15px; 
+            margin-top: 20px; 
+        }
+        .diff-box { 
+            grid-column: 1 / span 3; /* 3列分またぐ */
+            background: var(--info); 
+            color: white; 
+            padding: 20px; 
+            border-radius: 10px; 
+            font-size: 1.2rem; 
+            font-weight: bold; 
+            margin-top: 20px; 
+            text-align: center;
+        }
     </style>
 </head>
 <body>
@@ -103,7 +120,7 @@
 
     <div id="compare-tab" class="tab-content">
         <div id="compare-error" style="text-align:center; padding:50px; color:#666;">
-            比較を行うには、見積もり一覧でカードの<strong>「比較対象」に2つチェック</strong>を入れてください。
+            比較を行うには、見積もり一覧でカードの<strong>「比較対象」に3つチェック</strong>を入れてください。
         </div>
         <div id="compare-display" style="display:none;">
             <div class="compare-grid" id="compare-slots"></div>
@@ -152,7 +169,7 @@
 </template>
 
 <script>
-// --- UI・ユーティリティ機能 (元のスクリプトより保持) ---
+// --- UI・ユーティリティ機能 ---
 let instances = [];
 
 function switchTab(tabId) {
@@ -160,38 +177,53 @@ function switchTab(tabId) {
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     document.getElementById(tabId).classList.add('active');
     event.currentTarget.classList.add('active');
-    updateCalculations(); // タブ切り替え時にも再計算
+    updateCalculations();
 }
 
 function updateCalculations() {
     // 家族合計
     let f1 = 0, f2 = 0;
-    // 削除済みのインスタンスを除外
     instances = instances.filter(i => document.body.contains(i.el));
-    
     instances.forEach(i => { f1 += (i.total1 || 0); f2 += (i.total2 || 0); });
     document.getElementById('fam-total-1').textContent = f1.toLocaleString();
     document.getElementById('fam-total-2').textContent = f2.toLocaleString();
 
-    // 比較
+    // 比較 (3枚対応)
     const checked = instances.filter(i => i.dom.compareChk && i.dom.compareChk.checked);
     const err = document.getElementById('compare-error');
     const disp = document.getElementById('compare-display');
     const slots = document.getElementById('compare-slots');
     const res = document.getElementById('compare-result');
 
-    if (checked.length === 2) {
+    // 2つではなく3つの場合に表示するように変更
+    if (checked.length === 3) {
         err.style.display = 'none'; disp.style.display = 'block';
         slots.innerHTML = '';
         checked.forEach(inst => {
             const div = document.createElement('div');
             div.className = 'sim-card';
-            div.innerHTML = `<h3>${inst.dom.carrier.value}</h3><p>${inst.dom.plan.value}</p><div class="summary-val">¥${inst.total1.toLocaleString()}</div><p>(${inst.dom.labelP1.textContent})</p>`;
+            // 3枚並ぶためパディングなどを少し調整
+            div.style.padding = '15px';
+            div.innerHTML = `
+                <h3>${inst.dom.carrier.value}</h3>
+                <p style="font-size:0.9rem">${inst.dom.plan.value}</p>
+                <div class="summary-val" style="font-size:1.8rem">¥${inst.total1.toLocaleString()}</div>
+                <p>(${inst.dom.labelP1.textContent})</p>
+            `;
             slots.appendChild(div);
         });
-        const diff = (checked[0].total1 * 24) - (checked[1].total1 * 24);
-        const winner = diff > 0 ? "右のプラン" : "左のプラン";
-        res.textContent = `2年間の差額: 約 ¥${Math.abs(diff).toLocaleString()} (${winner}がお得)`;
+
+        // 3つの比較計算 (24ヶ月総額で最安を判定)
+        const costs = checked.map(c => c.total1 * 24);
+        const minCost = Math.min(...costs);
+        const maxCost = Math.max(...costs);
+        const diff = maxCost - minCost;
+        const winnerIdx = costs.indexOf(minCost);
+        const posNames = ["左", "中央", "右"];
+        const winnerPos = posNames[winnerIdx];
+
+        res.innerHTML = `2年間の最大差額: <span style="font-size:1.5rem">約 ¥${diff.toLocaleString()}</span><br>(${winnerPos}のプランが一番お得)`;
+
     } else {
         err.style.display = 'block'; disp.style.display = 'none';
     }
@@ -218,19 +250,14 @@ document.getElementById('card-btn').onclick = () => {
 document.getElementById('add-sim').onclick = addSimulator;
 
 
-// --- 新しいロジック (提供されたコード) ---
+// --- データロジック ---
 
 const GAS_URL = "https://script.google.com/macros/s/AKfycbxUj8Ojmgq2H-weGZRui_rdi9W6_y6QSUjbjKY1Lr89IsErmVNqxYZx_walEIs3QoaA/exec"; 
 let GLOBAL_DATA = null;
 
 const EXCLUSIVE_GROUPS = {
-    'UQ': [
-        ["自宅セット", "家族セット"]
-    ],
-    'Y!mobile': [
-        ["家族割引", "おうち割 光セット", "おうち割 でんきセット"],
-        ["PayPayカード割 ゴールド", "PayPayカード割"]
-    ],
+    'UQ': [["自宅セット", "家族セット"]],
+    'Y!mobile': [["家族割引", "おうち割 光セット", "おうち割 でんきセット"], ["PayPayカード割 ゴールド", "PayPayカード割"]],
     'softbank': []
 };
 
@@ -252,9 +279,8 @@ class SimulatorInstance {
         this.el = el; this.selectedOpts = new Map(); this.selectedNetOpts = new Map();
         this.currentCat = "iPhone"; this.netMainPrice = [0, 0];
         this.TYPE_LABELS = { 'mnp': 'MNP', 'new': '新規', 'standalone': '機種変更' };
-        // 集計用プロパティ初期化
         this.total1 = 0; this.total2 = 0;
-        this.carrierName = ""; // 比較表示用
+        this.carrierName = "";
 
         this.initDOM(); this.setupCarrier(); this.bindEvents();
     }
@@ -268,7 +294,7 @@ class SimulatorInstance {
             discArea: this.el.querySelector('.disc-area'), devDisc: this.el.querySelector('.dev-disc-input'),
             badgeSenior: this.el.querySelector('.badge-senior'), badgeChild: this.el.querySelector('.badge-child'),
             labelP1: this.el.querySelector('.label-p1'), labelP2: this.el.querySelector('.label-p2'),
-            compareChk: this.el.querySelector('.compare-chk') // 比較チェックボックス
+            compareChk: this.el.querySelector('.compare-chk')
         };
     }
 
@@ -301,9 +327,9 @@ class SimulatorInstance {
     bindEvents() {
         this.el.querySelector('.remove-btn').onclick = () => { 
             this.el.remove(); 
-            updateCalculations(); // 削除時に再計算
+            updateCalculations(); 
         };
-        this.dom.compareChk.onchange = () => updateCalculations(); // 比較チェック時に再計算
+        this.dom.compareChk.onchange = () => updateCalculations();
 
         this.dom.carrier.onchange = () => { this.selectedOpts.clear(); this.loadCarrier(); };
         this.dom.catBtns.forEach(b => b.onclick = (e) => {
@@ -570,19 +596,16 @@ class SimulatorInstance {
         this.el.querySelector('.res-disc').textContent = finalDisc1.toLocaleString();
         this.el.querySelector('.res-disc2').textContent = finalDisc2.toLocaleString();
         
-        // 合計計算と保存（家族合計用）
         this.total1 = Math.max(0, planP + d1 + optT + this.netMainPrice[0] + netT + finalDisc1);
         this.total2 = Math.max(0, planP + d2 + optT + this.netMainPrice[1] + netT + finalDisc2);
 
         this.el.querySelector('.final-1').textContent = this.total1.toLocaleString();
         this.el.querySelector('.final-2').textContent = this.total2.toLocaleString();
         
-        // UI更新（合計金額など）
         updateCalculations();
     }
 }
 
-// アプリ開始
 initApp();
 </script>
 </body>
