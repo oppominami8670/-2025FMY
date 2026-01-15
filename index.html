@@ -444,17 +444,37 @@ class SimulatorInstance {
 
         selects.forEach((s, index) => {
             const currentVal = s.value;
+            // 現在のセレクトボックス以外で選択されている割引名を取得
             const othersSelected = selects.filter((_, idx) => idx !== index).map(sel => sel.value.split('_')[0]).filter(v => v !== "0" && v !== "");
             s.innerHTML = '<option value="0">割引なし</option>';
             
             this.masterDiscounts.forEach(d => {
                 let name = d[0], price = parseInt(d[2]);
                 
+                // --- 楽天モバイルの修正 ---
                 if (carrier === 'Rakuten') {
                     const allowed = ["最強家族割", "最強こども割", "最強青春割", "最強シニアプログラム"];
                     if (!allowed.some(a => name.includes(a))) return;
+
+                    // 【追加】「最強シニアプログラム」選択時、こども割・青春割を表示しない
+                    if (othersSelected.some(o => o.includes("最強シニアプログラム"))) {
+                        if (name.includes("最強こども割") || name.includes("最強青春割")) return;
+                    }
+                    // 逆パターン：こども割・青春割が選択されている時、シニアプログラムを表示しない
+                    if (name.includes("最強シニアプログラム")) {
+                        if (othersSelected.some(o => o.includes("最強こども割") || o.includes("最強青春割"))) return;
+                    }
                 }
                 
+                // --- ワイモバイルの修正 ---
+                if (carrier === 'Y!mobile') {
+                    if (name.includes("親子割") && p.includes("シンプル3 S")) return;
+                    
+                    // 【追加】「シンプル3 S」選択時、「おうち割 でんきセット(E)」を表示しない
+                    if (p.includes("シンプル3 S") && name.includes("でんきセット")) return;
+                }
+
+                // (以下、既存のキャリア別ロジック...)
                 if (carrier === 'docomo') {
                     if (p.includes("ahamo")) return;
                     if (p.includes("ドコモポイ活MAX20") && name.includes("長期利用割")) return;
@@ -491,10 +511,6 @@ class SimulatorInstance {
                         const allowed = ["自宅セット割", "家族セット割", "au Payカード割", "UQ親子応援割"];
                         if (!allowed.some(a => name.includes(a))) return;
                     } else { return; }
-                }
-
-                if (carrier === 'Y!mobile') {
-                    if (name.includes("親子割") && p.includes("シンプル3 S")) return;
                 }
 
                 if (othersSelected.includes(name)) return;
@@ -648,5 +664,6 @@ initApp();
 </script>
 </body>
 </html>
+
 
 
